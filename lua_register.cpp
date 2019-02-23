@@ -332,7 +332,6 @@ unsigned long lua_register::getFromLuaStack(lua_State* L, int index)
 template<>
 int lua_register::getFromLuaStack(lua_State* L, int index)
 {
-    printf("getFromLuaStack<int> %d\n", (int)lua_tonumber(L, index));
     return (int)lua_tonumber(L, index);
 }
 
@@ -516,10 +515,10 @@ int lua_register::meta_get(lua_State* L)
 
         if(lua_isuserdata(L, -1))
         {
-            LuaUserDataToType<VariableBase*>::convert(L, -1)->get(L);
-            lua_remove(L, -2);
+           LuaUserDataToType<VariableBase*>::convert(L, -1)->get(L);
+           lua_remove(L, -2);
         }
-        else
+        else if(lua_isnil(L, -1))
         {
             lua_pushfstring(L, "Can't find '%s' class variable. (forgot registering class variable?)", lua_tostring(L, 2));
             lua_error(L);

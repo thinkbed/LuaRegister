@@ -76,7 +76,7 @@ namespace lua_register
     struct BaseType<T*> { typedef T Type; };
 
     template<typename T>
-    struct BaseType<T&> { typedef T TYpe; };
+    struct BaseType<T&> { typedef T Type; };
 
     template<typename T>
     struct ClassType
@@ -295,7 +295,7 @@ namespace lua_register
     struct ClassDelegate : UserBase
     {
         template <typename ... Args>
-        ClassDelegate(Args&&... args) : UserBase( new T(std::forward<Args>(args)...)) {}
+        ClassDelegate(Args... args) : UserBase( new T(std::forward<Args>(args)...)) {}
 
         ~ClassDelegate() { delete ((T*)m_p); }
     };
@@ -355,6 +355,10 @@ namespace lua_register
             lua_pushnumber(L, (int)(value));
         }
     };
+
+    int meta_get(lua_State* L);
+    int meta_set(lua_State* L);
+    void push_meta(lua_State* L, const char* name);
 
     template<typename T>
     struct ObjectToLua
@@ -449,7 +453,6 @@ namespace lua_register
             int index = 1;
             pushToLuaStack(L, (*fun)(getFromLuaStack<Args>(L, index++)...) ); // Parameter pack
             enum_stack(L);
-            printf("PushToLuaStack %d\n", index);
             return 1; // hint 1 return value in stack
         }
     };
@@ -505,11 +508,11 @@ namespace lua_register
     {
         static int call(lua_State* L)
         {
-            typedef RVal(T::*MemFunc)(Args&& ...);
+            typedef RVal(T::*MemFunc)(Args ...);
             MemFunc fun = getUpValue<MemFunc>(L);
             int index = 1;
             T* t = getFromLuaStack<T*>(L, index++);
-            pushToLuaStack(L, t->*fun(getFromLuaStack<Args>(index++)...));
+            pushToLuaStack(L, (t->*fun)(getFromLuaStack<Args>(L, index++)...));
         
             return 1; // hint 1 return value in stack
         }
@@ -521,37 +524,38 @@ namespace lua_register
     {
         static int call(lua_State* L)
         {
-            typedef void(T::*MemFunc)(Args&& ...);
+            typedef void(T::*MemFunc)(Args ...);
             MemFunc fun = getUpValue<MemFunc>(L);
             int index = 1;
             T* t = getFromLuaStack<T*>(L, index++);
-            t->*fun(getFromLuaStack<Args>(index++)...);
+            (t->*fun)(getFromLuaStack<Args>(L, index++)...);
 
             return 0; // hint 0 return value in stack
         }
     };
 
-    template<typename T, typename RVal, typename ... Args>
-    void pushFunctionDelegate(lua_State* L, RVal (T::*func)(Args&&...))
+    template<typename RVal, typename T, typename ... Args>
+    void pushFunctionDelegate(lua_State* L, RVal (T::*func)(Args...))
     {
-        lua_pushcclosure(L, MemberFunctionDelegate<RVal,Args...>::call, 1);
+        lua_pushcclosure(L, MemberFunctionDelegate<RVal,T, Args...>::call, 1);
     }
 
     template<typename T, typename ...Args>
     int constructor(lua_State* L)
     {
         int index = 2;
-        new(lua_newuserdata(L, sizeof(ClassDelegate<T>))) ClassDelegate<Args ...>(getFromLuaStack<Args>(index++)...);
-        push_meta(L, ClassName<typename ClassType<T>::Type>::Name());
+        new(lua_newuserdata(L, sizeof(ClassDelegate<T>))) ClassDelegate<T>(getFromLuaStack<Args>(L, index++)...);
+        push_meta(L, ClassName<typename ClassType<T>::Type>::name());
         lua_setmetatable(L, -2);
 
         return 1;
     }
 
     template<typename T>
-    void destroyer(lua_State* L)
+    int destroyer(lua_State* L)
     {
         ((UserBase*)lua_touserdata(L, 1))->~UserBase();
+        return 0;
     }
 
     //C++ register global function to lua
@@ -573,7 +577,7 @@ namespace lua_register
 
     // C++ get Global Variable from lua
     template<typename T>
-    void getVariable(lua_State* L, const char* name)
+    T getVariable(lua_State* L, const char* name)
     {
         lua_getglobal(L, name);
         return popFromLuaStack<T>(L);
@@ -581,7 +585,7 @@ namespace lua_register
 
     // C++ call funcion defined by lua
     template<typename RVal, typename ... Args>
-    RVal callLuaFunction(lua_State* L, const char* name, Args&&... args)
+    RVal callLuaFunction(lua_State* L, const char* name, Args... args)
     {
         lua_pushcclosure(L, on_error, 0);
         int errfunc = lua_gettop(L);
@@ -602,10 +606,6 @@ namespace lua_register
         lua_remove(L, errfunc);
         return popFromLuaStack<RVal>(L);
     }
-
-    int meta_get(lua_State* L);
-    int meta_set(lua_State* L);
-    void push_meta(lua_State* L, const char* name);
 
     template<typename T>
     void registerClass(lua_State* L, const char* name)
@@ -671,7 +671,7 @@ namespace lua_register
         {
             lua_pushstring(L, name);
             new(lua_newuserdata(L, sizeof(F))) F(func);
-            pushFunctionDelegate<F>(L, func);
+            pushFunctionDelegate(L, func);
             lua_rawset(L, -3);
         }
         lua_pop(L, 1);
