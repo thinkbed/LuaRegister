@@ -542,6 +542,7 @@ int lua_register::meta_set(lua_State* L)
     }
     else if(lua_isnil(L, -1))
     {
+       lua_remove(L, -1);
        invoke_parent(L);
 
        if(lua_isuserdata(L, -1))
@@ -550,6 +551,9 @@ int lua_register::meta_set(lua_State* L)
        }
        else
        {
+           lua_remove(L, -1);
+            lua_pushfstring(L, "Can't find '%s' class variable. (forgot registering class variable?)", lua_tostring(L, 2));
+            lua_error(L);
        }
     }
     lua_settop(L, 3);

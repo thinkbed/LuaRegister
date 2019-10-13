@@ -292,12 +292,12 @@ namespace lua_register
     };
 
     template<typename T>
-    struct ClassDelegate : UserBase
+    struct ValueToUser : UserBase
     {
         template <typename ... Args>
-        ClassDelegate(Args... args) : UserBase( new T(std::forward<Args>(args)...)) {}
+        ValueToUser(Args... args) : UserBase( new T(std::forward<Args>(args)...)) {}
 
-        ~ClassDelegate() { delete ((T*)m_p); }
+        ~ValueToUser() { delete ((T*)m_p); }
     };
 
     template<typename T>
@@ -317,7 +317,7 @@ namespace lua_register
     {
         static void push(lua_State* L, T& t)
         {
-            new (lua_newuserdata(L, sizeof(ClassDelegate<T>))) ClassDelegate<T>(t);
+            new (lua_newuserdata(L, sizeof(ValueToUser<T>))) ValueToUser<T>(t);
         }
     };
 
@@ -398,6 +398,7 @@ namespace lua_register
     template<> char               getFromLuaStack(lua_State* L, int index);
     template<> unsigned char      getFromLuaStack(lua_State* L, int index);
     template<> short              getFromLuaStack(lua_State* L, int index);
+    template<> unsigned short     getFromLuaStack(lua_State* L, int index);
     template<> long               getFromLuaStack(lua_State* L, int index);
     template<> unsigned long      getFromLuaStack(lua_State* L, int index);
     template<> int                getFromLuaStack(lua_State* L, int index);
@@ -452,7 +453,6 @@ namespace lua_register
             F fun = getUpValue<F>(L);
             int index = 1;
             pushToLuaStack(L, (*fun)(getFromLuaStack<Args>(L, index++)...) ); // Parameter pack
-            enum_stack(L);
             return 1; // hint 1 return value in stack
         }
     };
@@ -544,7 +544,7 @@ namespace lua_register
     int constructor(lua_State* L)
     {
         int index = 2;
-        new(lua_newuserdata(L, sizeof(ClassDelegate<T>))) ClassDelegate<T>(getFromLuaStack<Args>(L, index++)...);
+        new(lua_newuserdata(L, sizeof(ValueToUser<T>))) ValueToUser<T>(getFromLuaStack<Args>(L, index++)...);
         push_meta(L, ClassName<typename ClassType<T>::Type>::name());
         lua_setmetatable(L, -2);
 
